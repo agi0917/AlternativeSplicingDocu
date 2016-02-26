@@ -1,58 +1,496 @@
 ---
-title: "Vignette Title"
-author: "Vignette Author"
+title: "Alternative Splicing"
+subtitle: A Documentation Project
+author: "Peter von Rohr"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
+output: pdf_document
 vignette: >
   %\VignetteIndexEntry{Vignette Title}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+bibliography: AlternativeSlicingDocu.bibtex
 ---
 
-Vignettes are long form documentation commonly included in packages. Because they are part of the distribution of the package, they need to be as compact as possible. The `html_vignette` output type provides a custom style sheet (and tweaks some options) to ensure that the resulting html is as small as possible. The `html_vignette` format:
+### Disclaimer
+This project documents everything around the project on `Alternative Splicing` that I am working on @ FGCZ. 
 
-- Never uses retina figures
-- Has a smaller default figure size
-- Uses a custom CSS stylesheet instead of the default Twitter Bootstrap style
+## Background
+We start with doing feature counts in bam-files using App `EzAppFeatureCounts` (file app-featureCounts.R) from package `ezrun`. The run method `ezMethodFeatureCounts` of reference class `EzAppFeatureCounts` basically calls function `Rsubread::featureCounts`. 
 
-## Vignette Info
+### Input for `Rsubread::featureCounts`
+To be able to run a first analysis that counts features in bam-files, we have to understand what input arguments are required by `Rsubread::featureCounts`. This function is described in section 3 of the `Rsubread` vignette. From the vignette, it seams that all we have to give to function `Rsubread::featureCounts` is a bam-file and an annotation file. 
 
-Note the various macros within the `vignette` section of the metadata block above. These are required in order to instruct R how to build the vignette. Note that you should change the `title` field and the `\VignetteIndexEntry` to match the title of your vignette.
+For the version of `Rsubread::featureCounts` that is wrapped into `EzAppFeatureCounts`, we have to specify some more details. Most of the parameters can be inferred by their appearance in the call to `Rsubread::featureCounts` and by a trackback into the users guide. Table 3 in Section 6 of that userguide gives an overview over all parameters that can be specified when calling `Rsubread::featureCounts`. The ones that we specified are shown in the following table
 
-## Styles
-
-The `html_vignette` template includes a basic CSS theme. To override this theme you can specify your own CSS in the document metadata as follows:
-
-    output: 
-      rmarkdown::html_vignette:
-        css: mystyles.css
-
-## Figures
-
-The figure sizes have been customised so that you can easily put two images side-by-side. 
-
-```{r, fig.show='hold'}
-plot(1:10)
-plot(10:1)
+```{r FeatureCountInputOpts, echo=FALSE, results='asis'}
+Arguments  <- c('annot.ext',
+                'gtfFeatureType',
+                'featureLevel',
+                'allowMultiOverlap',
+                'paired',
+                'strandMode',
+                'minMapQuality',
+                'minFeatureOverlap',
+                'keepMultiHits',
+                'countPrimaryAlignmentsOnly')
+Description <- c("Annotation oder feature file",
+                 "Type of feature, such as exon. Only features provided in annotation will be counted",
+                 "Feature level such as gene or transcript",
+                 "Should reads be allowed to be assigned to more than one meta-feature",
+                 "Fragments are counted instead of reads",
+                 "unstranded, i.e., both = 0, sense = 1, or antisense = 2",
+                 "minimum quality from mapping to be counted",
+                 "minimum number of bases overlapping between read or fragment and feature",
+                 "count also reads with multiple mapping locations",
+                 "only primary alignments will be counted")
+knitr::kable(data.frame(Arguments,Description))
 ```
 
-You can enable figure captions by `fig_caption: yes` in YAML:
+The arguments shown above were all simple to specify in `EzAppFeatureCounts`. The only parameter that was difficult was the annotation file. The problem is related to the fact that one cannot just specify the path to the annotation file, but one has to specify the location where the annotation file is inside an S4 object of class "EzRef". Have a look at the help file for "EzRef" using 
 
-    output:
-      rmarkdown::html_vignette:
-        fig_caption: yes
-
-Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
-
-## More Examples
-
-You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
-
-```{r, echo=FALSE, results='asis'}
-knitr::kable(head(mtcars, 10))
+```{r, eval=FALSE}
+?EzRef
 ```
 
-Also a quote using `>`:
+The example section of that help file gives some hints on how one has to come up with an acceptable S4 "EzRef"-object. For our example this works as follows
 
-> "He who gives up [code] safety for [code] speed deserves neither."
-([via](https://twitter.com/hadleywickham/status/504368538874703872))
+```{r RefFeatureFile}
+sRefFeatureFile <- "/srv/GT/reference/Mus_musculus/Ensembl/GRCm38/Annotation/Version-2014-02-25/Genes/genes.gtf"
+```
+
+Given that the complete path to the annotation file is as shown above, we have to extract the part between the organism name and the Version info into an object called `refBuild`.
+
+```{r RefBuild}
+sOrganismName <- "Mus_musculus"
+vecFeatPath <- unlist(strsplit(sRefFeatureFile, "/"))
+nRefBuildStartIdx <- which(vecFeatPath == sOrganismName)
+nRefBuildEndIdx <- grep("^Version", vecFeatPath)
+refBuild <- paste(vecFeatPath[nRefBuildStartIdx:nRefBuildEndIdx], collapse = "/")
+cat(" * RefBuild: ", refBuild, "\n")
+```
+
+The reference feature file is then constructed using
+
+```{r RefFeatFile, eval=FALSE}
+param <- ezParam(list(refBuild=refBuild))
+```
+
+The expression `param$ezRef@refFeatureFile` then returns the path to the feature file.
+
+
+## Methods
+Now that the program produces results, we want to better understand those results. Therefore, we have to have a look at the methods behind `Rsubread`. The methods used in `Rsubread` is described in its usersguide and also in a paper by @Liao01042014. 
+
+## Case study
+In chapter 8 of the usersguide that comes with the `Rsubread` package, a case study for comparing RNA-seq data from different tissue in Humans (brain vs. universal reference) is described. In what follows we try to replicate that for our data.
+
+
+## DEXSeq for Analysing Alternative Splicing
+Once that we have our feature counts, we are ready to analyse whether we can quantify any differential usage between different experimental units. This is done using the BioC package `DEXSeq`. In what follows, we are trying to understand and to reproduce the material in the vignette of `DEXSeq` (see https://bioconductor.org/packages/3.3/bioc/vignettes/DEXSeq/inst/doc/DEXSeq.pdf). 
+
+### Preparation
+The vignette of `DEXSeq` uses the pasilla dataset, an RNA-Seq dataset generated by @Brooks01022011. 
+
+### Annotations
+Annotation/feature files must be in GTF format and are preprocessed into so-called GFF files. This is done by python scripts outside of R. We try to understand the preprocessing of the annotation files and try to come up with an alternative route how to construct these GFF files.
+
+### Counting
+Feature counting for the dataset used in the vignette of `DEXSeq` is also done with python. In our case we have done feature counts with package `RSubread`. On more quesiton will be how we have to convert our counts into the formats of the counts that are expected by `DEXSeq`. 
+
+### Reminder of analysis
+The rest of the analysis is done in R. The data processed count data is available as package `pasilla` on BioC. 
+
+__NB__: On http://fgcz-rstudio.uzh.ch/ I installed the missing package `pasilla` to a library that is inside my account.
+
+```{r DownloadPasilla, eval=FALSE}
+.libPaths(new = "/home/petervr/lib/R/library")
+source("https://bioconductor.org/biocLite.R")
+biocLite("pasilla")
+```
+
+The datafiles that come with the package are
+
+```{r ShowPasillaData}
+inDir <- system.file("extdata", package="pasilla")
+list.files(inDir)
+countFiles  <-  list.files(inDir, pattern="fb.txt$", full.names=TRUE)
+(flattenedFile  <-  list.files(inDir, pattern="gff$", full.names=TRUE))
+```
+
+The first step in the analysis is to create the so-called sample table. This table relates samples to experimental conditions. In the vignette this is constructed on the fly
+
+```{r SampleTable}
+sampleTable  <-  data.frame(
+   row.names = c( "treated1", "treated2", "treated3",
+                  "untreated1", "untreated2", "untreated3", "untreated4" ),
+   condition = c("knockdown", "knockdown", "knockdown",
+                 "control", "control", "control", "control" ),
+   libType = c( "single-end", "paired-end", "paired-end",
+                "single-end", "single-end", "paired-end", "paired-end" ) )  
+print(sampleTable)
+```
+
+Our sample table has the samples as rownames and the covariates as columns. In the example in the vignette there are two covariates, (1) the condition and (2) the library type, as it seams that the samples are not all generated with the same sequencing method. So far it is important that there must be at least one covariate and its name has to be `condition`. This is the main criterion for differentiating the samples.
+
+From the information, we have collected so far, a DEXSeqDataSet object can be constructed using the function `DEXSeqDataSetFromHTSeq` as follows
+
+```{r LoadDEXSeqResult, echo=FALSE, results='hide'}
+sDxdFn <- "dxd.Rd"
+bRunAnalysis <- TRUE
+if (file.exists(sDxdFn)) {
+  suppressPackageStartupMessages( library( "DEXSeq" ) )
+  load(file = sDxdFn)
+  bRunAnalysis <- FALSE
+}
+```
+
+```{r ConstructDEXSeqDataSet, eval=bRunAnalysis}
+suppressPackageStartupMessages( library( "DEXSeq" ) )
+dxd  <-  DEXSeqDataSetFromHTSeq(
+   countFiles,
+   sampleData=sampleTable,
+   design= ~ sample + exon + condition:exon,
+   flattenedfile=flattenedFile )
+```
+
+```{r DEXSeqSave, echo=FALSE, results='hide'}
+if (!file.exists(sDxdFn)) {
+  save(dxd, file = "dxd.Rd")
+}
+```
+
+The above function takes four arguments. 
+
+1. the count files which contain counts for all exons in separate files for each sample
+2. the sample table which relates samples to experimental covariates
+3. the model formula specifying the contrasts, we are interested in. Given the above formula, we are interested in differences in exon usage due to changes in the variable condition.
+4. the flattened GFF file generated by one of the python scripts
+
+### Inspecting example data
+In order to keep the runtime of the vignette small, only a subset of the genes is considered
+
+```{r GeneSubset}
+genesForSubset = read.table(
+  file.path(inDir, "geneIDsinsubset.txt"),
+  stringsAsFactors=FALSE)[[1]]
+dxd = dxd[geneIDs( dxd ) %in% genesForSubset,]
+```
+
+The `DEXSeqDataSet` class is derived from the `DESeqDataSet` class. Hence all accessor functions for column data and row data are available here. Each row of the `DEXSeqDataSet` contains in each column the count data from a given exon labelled with `this` as well as the count data from the sum of the other exons belonging to the same gene, labelled with `others`. Annotation and column information is specified in `colData`.
+
+```{r ColDataAccessor}
+colData(dxd)
+```
+
+```{r DefRowCount, echo=FALSE}
+nRowCount <- 5
+```
+
+Accessing the first `r nRowCount` rows by doing the following
+
+```{r HeadCounts}
+<<DefRowCount>>
+head( counts(dxd), nRowCount )  
+```
+
+Notice, there are seven samples and 14 columns in the above count data. The first seven columns correspond to counts of the specific exon and the remaining seven are the counts of all other exons in that gene. The mapping of the columns to the counts can be seen using
+
+```{r ColumnCountsMapping}
+split( seq_len(ncol(dxd)), colData(dxd)$exon )
+```
+
+Accessing the first `r nRowCount` rows of the counts belonging to the exonic region ('this') can be done by
+
+```{r ThisFeatureCount}
+head( featureCounts(dxd), 5 )
+```
+
+To see the details about the counting bins, we can use the `rowRanges()` function
+
+```{r DetailRowRanges}
+head( rowRanges(dxd), 3 )
+```
+
+The sample table can be braught back using function `sampleAnnotation()`
+
+```{r RetrieveSampleTable}
+sampleAnnotation( dxd )
+```
+
+### Normalization
+```{r Normalization}
+dxd = estimateSizeFactors( dxd )
+```
+
+### Dispersion estimation
+```{r DispersionEstimation}
+dxd = estimateDispersions( dxd )
+plotDispEsts( dxd )
+```
+
+
+## Own analysis - data transformation
+In order to get started with a DEXSeq analysis with our own data, we need to do two preparatory data transformation. 
+
+1. Extend the existing GTF annotation file with the specialized Exon-Ids that are used by DEXSeq
+2. Create a flattened version of the GTF file in GFF format.
+
+The second step is done with the python scripts as indicated in the vignette. 
+
+The task now is to transform the count data and the existing GTF annotation into a format that is accepted by `DEXSeq`. The first step is to get all arguments for the function `DEXSeqDataSetFromHTSeq` ready. The two arguments `design` which specifies the contrasts and the `sampleData` which links exerimental factors to samples, are relatively straight forward to come up with. 
+
+The count files and the flattened annotation files need more work to come up with. The count files contain for each sample two columns with the Exon-Ids in the first column and the counts in the second column. In principle RSubread produces such count files, but the problem is that the exon-ids are special in the form that is required by `DEXSeq`. `DEXSeq` has its own Exon-Id system where an ID is composed of the gene-id and an internal Exon-number. These two tokens are pasted together, separated by a colon (':'). 
+
+One way of producing such count files with the special `DEXSeq`-version of exon-ids is to extend the existing GTF-file by an additional identifier which has the format that is required by `DEXSeq`. From that, we can then produce a GFF file as it is specified in Appendix C. 
+
+
+## DEXSeq Data Preparation
+Data preparation is done as described in the `DEXSeq` vignette. Here, we follow closely the steps described in secions 2.3ff of the vignette (https://bioconductor.org/packages/3.3/bioc/vignettes/DEXSeq/inst/doc/DEXSeq.pdf). The data preparation is done with Python scripts which are based on the Python package `HTSeq`. 
+
+### Converting GTF Annotations
+`DEXSeq` works with annotation files in GFF format. Hence any existing annotation files in GTF format must be converted into the GFF format. This conversion is done using the python script `dexseq_prepare_annotation.py` that comes with package `DEXSeq`. On the command line, in the directory where the original GTF file is, the conversion is done as follows
+
+```
+python \
+ /misc/ngseq8/stow/R-3.2.2/lib/R/library/DEXSeq/python_scripts/dexseq_prepare_annotation.py \
+ genes.gtf \
+ genes_DEXSeq.gff
+```
+
+### Counting reads
+Once the GFF file is generated, we can do the counting with the second python script that comes with `DEXSeq`. According to the `DEXSeq` vignette, the GFF file and the SAM- file with the reads must be in the current working directory. But the counting does also work when creating a link from the current working directory to the GFF file. 
+
+The bam files are converted to sam files using samtools as shown below.
+
+```
+samtools view -h -o Colon1.sam Colon1.bam
+```
+
+Creating the link and starting the counting is done as follows
+
+```
+ln -s /srv/GT/reference/Mus_musculus/Ensembl/GRCm38.PatchesSkipped/Annotation/Version-2015-06-25/Genes/genes_DEXSeq.gff.20160219 genes_DEXSeq.gff
+python /misc/ngseq8/stow/R-3.2.2/lib/R/library/DEXSeq/python_scripts/dexseq_count.py \
+ genes_DEXSeq.gff \
+ Colon1.sam \
+ Colon1.txt
+```
+
+The results from the counting are stored in the file `Colon1.txt`. This has the required format of `GeneId:InternalExonId  Count`. 
+
+### ezApp "EzAppDEXSeqCounting"
+The conversion of the annotation files from gtf to gff format and the counting using the python-scripts from the DEXSeq package is done in ezApp "EzAppDEXSeqCounting". The run method of the reference class is called "ezMethodDEXSeqCounting". This method does two steps, first the gtf annotation file is converted into gff format, in case there is no gff file available. Once a gff annotation file exists, the counting is done for all samples. 
+
+### Prerequisites
+Since we are doing annotation file format conversion and exon counting with the python script that are coming with the DEXSeq package, we have to manage to run python scripts from inside of the ezApp, i.e., from inside of R. While the above mentioned commands run from the command line, they are producing an error when used from inside of R. The error tells that the "HTSeq" package cannot be found which is most likely due to a missing PYTHONPATH. Looking at the global variable files of package "ezRun", we get more insight into how to run python scripts from inside of R. The trick is to define a string which contains the PYTHONPATH definition and the path to the python executable. Surprisingly enough, the assignment of the PYTHONPATH and the path to the python executable must be separated by a space and not by a semi-colon (";"). Hence for our example the required assignment in the global variables file looks as follows
+
+```
+HTSEQ_PREFIX='PYTHONPATH="/usr/local/ngseq/lib/python/:/usr/local/ngseq/lib/python2.7:/usr/local/ngseq/lib/python2.7/dist-packages" /usr/local/ngseq/bin/python'
+```
+
+Inside of EzAppDEXSeqCounting, calls to the python scripts are composed of the above defined prefix, the absolute path to the script name which depends on `system.file(package = "DEXSeq", "python_scripts")` and the arguments to the scripts, like input read files, annotation files and output files.
+
+
+## Assessing differential exon counts
+Now that we have the count data from the reads, we proceed as shown in the DEXSeq vignette with the `pasilla` dataset. 
+
+### Step 1: Sample table
+The first step is to create a sample table for the data that we want to analyse. The sample table links samples to covariates. In contrary to the vignette where there were two covariates, in our data here, we just have one covariate which corresponds to the tissue type. Since the minimal requirements for the sample table is to have at least one covariate which is called "condition", the tissue type covariate is assigned to column "condition"
+
+```{r SampleTableMMTissues}
+sampleTable <- data.frame(
+  row.names = c("Colon1", "Colon3","Colon5",
+                "SI1", "SI3","SI5"),
+  condition = c("Colon", "Colon","Colon",
+                "SI","SI","SI")
+)
+print(sampleTable)
+```
+
+### Step 2: DEXSeqDataSet
+As soon as the four inputs 
+
+1. count files
+2. sample table
+3. design of experiment
+4. annotation file
+
+are ready, we can construct a `DEXSeqDataSet` object which is the primary container of a DEXSeq analysis. A `DEXSeqDataSet` is obtained from the function `DEXSeqDataSetFromHTSeq()` which takes the above listed four arguments as input. 
+
+For our analysis, the command looks as follows
+
+```{r eval=FALSE}
+dxd <- DEXSeq::DEXSeqDataSetFromHTSeq(
+  countFiles,
+  sampleData    = sampleTable,
+  design        = ~ sample + exon + condition:exon,
+  flattenedfile = sRefFeatGff )
+```
+
+The remainder of the analysis is all about extending the `DEXSeqDataSet` object.
+
+### Step 3: Normalisation
+Different samples are sequenced with different depth. To adjust for such coverage bias, we have to estimate __size factors__ which measure relative sequencing depth. Normalisation in `DEXSeq` is done the same way as in DESeq and in DESeq2 using the function `estimateSizeFactors()`. The resulting size factors can be seen by 
+
+```{r eval=FALSE}
+dxd@modelFrameBM$sizeFactor
+```
+
+Doing a histogram of these factors shows that they are the same for all exons from the same sample. 
+
+### Step 4: Dispersion
+To test for differential exon usage, variability in the data must be estimated. It is important to be able to separate technical and biological variation (noise) from variation that is caused by experimental conditions. Noise is typically assessed from the biological replicate measures in the dataset. In RNA-Seq experiments, the number of replicates is typically to small to estimate variation reliably for each exon. Therefore variance is estimated accross exons and genes in an intensity dependent manner. The approach used in `DEXSeq` and in `DESeq`/`DESeq2` is described in @Love2014.  
+
+The function for estimating dispersion is called 
+
+```{r eval=FALSE}
+dxd = DEXSeq::estimateDispersions( dxd )
+```
+
+As a shrinkage diagnostic which might also be useful for quality control, one might have a look at the plot of per exon dispersion estimates versus the mean normalized counts, the resulting fitted values and the aposteriori shrinked dispersion estimates. This plot is generated by 
+
+```{r eval=FALSE}
+plotDispEsts( dxd )
+```
+
+### Step 5: Assessing differential exon usage
+The formula specified with the parameter `design` when creating the `DEXSeqDataSet` object is taken to be the full model. This is compared to a reduced model which is missing the interaction `condition:exon`. Using a $\chi^2$ test, we can compare the two models. The command for testing differential expression is 
+
+```{r}
+dxd = DEXSeq::testForDEU( dxd )
+```
+
+### Step 6: Fold changes
+
+```{r}
+dxd = DEXSeq::estimateExonFoldChanges( dxd, fitExpToVar="condition")
+```
+
+### Extracting results
+Results can be extracted without all intermediate results using the function
+
+```{r}
+dxr1 = DEXSeqResults( dxd )
+```
+
+The description of the different result characteristics is available via
+
+```{r}
+mcols(dxr1)$description
+```
+
+### Properties of results
+__NB__: Results that are shown below here are again from the `pasilla` data not from our own dataset.
+
+From this result object, we can answer questions, like how many genes have a false discovery rate below 0.1
+
+```{r}
+table ( dxr1$padj < 0.1 )
+```
+
+We can also ask how many genes are affected by differntial exon usage
+
+```{r}
+table ( tapply( dxr1$padj < 0.1, dxr1$groupID, any ) )
+```
+
+To see how the power to detect differntial exon usage depends on the number of reads that map to an exon, an MA-plot is useful which shows the log fold change versus the average normalized count per exon.
+
+```{r}
+plotMA( dxr1, cex=0.8 )
+```
+
+## More experimental factors
+Now we are going back and create an initial version of the DEXSeqDataSet and specify more experimental factors. Then we are using the wrapper that runs all the analyses in one command and extract the new results from the return of the wrapper function
+
+```{r LoadInitDEXSeqDataSet, echo=FALSE, results='hide'}
+sampleTable  <-  data.frame(
+   row.names = c( "treated1", "treated2", "treated3",
+                  "untreated1", "untreated2", "untreated3", "untreated4" ),
+   condition = c("knockdown", "knockdown", "knockdown",
+                 "control", "control", "control", "control" ),
+   libType = c( "single-end", "paired-end", "paired-end",
+                "single-end", "single-end", "paired-end", "paired-end" ) )  
+sDxdFn <- "dxd.Rd"
+if (file.exists(sDxdFn)) {
+  load(file = sDxdFn)
+} else {
+  dxd  <-  DEXSeqDataSetFromHTSeq(
+   countFiles,
+   sampleData=sampleTable,
+   design= ~ sample + exon + condition:exon,
+   flattenedfile=flattenedFile )
+}
+dxd = dxd[geneIDs( dxd ) %in% genesForSubset,]
+```
+
+```{r ExtendedModel}
+dxr2 <- DEXSeq::DEXSeq(dxd, 
+                       fullModel = ~ sample + exon + libType:exon + condition:exon, 
+                       reducedModel = ~ sample + exon + libType:exon)
+```
+
+Once that new result object is constructed, we are ready to do some plots
+
+
+## Plot
+The function `plotDEXSeq` can be used to visualize results. 
+
+```{r VisualizeResults}
+DEXSeq::plotDEXSeq( dxr2, "FBgn0010909", legend=TRUE, cex.axis=1.2, cex=1.3, lwd=2 )
+```
+
+
+## Complete report
+A complete report can be generated using the function
+
+```{r HtmlReport}
+DEXSeq::DEXSeqHTML( dxr2, FDR=0.1, color=c("#FF000080", "#0000FF80") )
+```
+
+
+## Minimal path to get to results
+From the above, it becomes clear what the minimal path to the resuls is. 
+
+* Create initial DEXSeqData set, starting from count files, a sample table, a design and an annotation file.
+
+```{r eval=FALSE}
+dxd  <-  DEXSeq::DEXSeqDataSetFromHTSeq(
+   countFiles,
+   sampleData=sampleTable,
+   design= ~ sample + exon + condition:exon,
+   flattenedfile=flattenedFile )
+```
+
+* Extract the result using the wrapper `DEXSeq`
+
+```{r eval=FALSE}
+dxr <- DEXSeq:::DEXSeq(dxd)
+```
+
+* Generate the report
+
+```{r eval=FALSE}
+DEXSeq::DEXSeqHTML(dxr) 
+```
+
+
+\newpage
+
+## Side Note
+### Problem with `browseVignettes()`
+In RStudio on http://fgcz-rstudio.uzh.ch/ the function `browseVignettes()` has a problem. When called without any arguments, it lists the table of content of all vignettes, but the links do not work. 
+
+When calling the function `browseVignettes()` with arguments, e.g., `browseVignettes(package = "Rsubread")`, the list of vignettes for the specific package is shown, but the links do not work.
+
+\newpage
+
+## Session Info
+```{r SessionInfo}
+sessionInfo()
+```
+
+\newpage
+
+# References
+
