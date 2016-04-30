@@ -1,0 +1,207 @@
+---
+title: "Differential Exon Usage Using Package DEXSeq"
+author: "Peter von Rohr"
+date: 2016-03-11
+output: pdf_document
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+bibliography: DiffExUsage.bibtex
+---
+
+```{r DocumentStatus, echo=FALSE, results='asis'}
+r6objDocuStat <- rqudocuhelper::R6ClassDocuStatus$new()
+r6objDocuStat$setProject(psProject = "DEXSeq")
+
+# r6objDocuStat$setVersion(psVersion = "0.0.900")
+# r6objDocuStat$setDate(psDate = "31.03.2016")
+# r6objDocuStat$setAuthor(psAuthor = "pvr")
+# r6objDocuStat$setStatus(psStatus = "Init")
+  
+# r6objDocuStat$setVersion(psVersion = "0.0.901")
+# r6objDocuStat$setDate(psDate = "01.04.2016")
+# r6objDocuStat$setAuthor(psAuthor = "peter")
+# r6objDocuStat$setStatus(psStatus = "First changes")
+# # 
+# r6objDocuStat$setVersion(psVersion = "0.0.902")
+# r6objDocuStat$setDate(psDate = "22.04.2016")
+# r6objDocuStat$setAuthor(psAuthor = "peter")
+# r6objDocuStat$setStatus(psStatus = "Adding description on analysis")
+
+# r6objDocuStat$setVersion(psVersion = "0.0.903")
+# r6objDocuStat$setStatus(psStatus = "Adding more details on the analysis")
+
+r6objDocuStat$setVersion(psVersion = "0.0.904")
+r6objDocuStat$setStatus(psStatus = "Starting with report, added TODO-list")
+
+r6objDocuStat$writeStatusToFile()
+r6objDocuStat$knitr_kable()
+
+```
+
+# Disclaimer
+This document describes how to assess differential exon usage using the R/BioC-Package `DEXSeq`. Differential exon usage can be analysed by comparing `RNA-Seq` data from different tissues or under different experimental conditions. Since the basic nature of `RNA-Seq` data is counts of molecules within a given experimental sample, the measure of differential exon usage amounts to being a function of the count differences between the different experimental conditions. The R/BioC-package `DEXSeq` implements a statistical method based on generalized linear models which offers to control false discovery rate by taking biological variation into account.  
+
+The description in this document follows closely the vignette of `DEXSeq` which is available from http://bioconductor.org/packages/release/bioc/html/DEXSeq.html and also from within R by the command 
+
+```{r eval=FALSE}
+browseVignettes(package = "DEXSeq")
+```
+
+On the BioC website for `DEXSeq` the publication by @ARH2012 is mentioned as the reference to be cited for the package. This reference can also be obtained by
+
+```{r DEXSeqCitation, eval=FALSE}
+citation(package = "DEXSeq")
+```
+
+# Preparation
+Before being able to analyse differential exon usage, one has to do the following preparations steps
+
+1. __Alignment__: In case, the input data consists of raw read files, they first have to be aligned against a reference genome (not transcriptome) sequence which results in sam or bam files. It is important to use a splice-aware aligner (i.e. an alignment tool that can handle reads that span across introns) such as TopHat2, GSNAP or STAR. `DEXSeq` works with sam files as input for the reads. In case aligned reads are available in bam format, they can be converted using `samtools`. 
+2. __Annotations__: The requirements for the annotation are somewhat special, and it is recommended to follow the workflow given in the `DEXSeq` vignette.
+3. __Feature counts__: Python scripts coming with package `DEXSeq` are used for counting the how many exons occur in a given read file sample.
+
+Preparatory steps to load the data are shown below
+
+```{r LoadPasillaPackage, echo=FALSE, results='hide'}
+if (!require(pasilla)) {
+  source("https://bioconductor.org/biocLite.R")
+  biocLite("pasilla")
+  require(pasilla)
+}
+
+```
+
+```{r ShowPasillaData}
+inDir <- system.file("extdata", package="pasilla")
+list.files(inDir)
+countFiles  <-  list.files(inDir, pattern="fb.txt$", full.names=TRUE)
+(flattenedFile  <-  list.files(inDir, pattern="gff$", full.names=TRUE))
+sampleTable  <-  data.frame(
+   row.names = c( "treated1", "treated2", "treated3",
+                  "untreated1", "untreated2", "untreated3", "untreated4" ),
+   condition = c("knockdown", "knockdown", "knockdown",
+                 "control", "control", "control", "control" ),
+   libType = c( "single-end", "paired-end", "paired-end",
+                "single-end", "single-end", "paired-end", "paired-end" ) )  
+
+```
+
+
+# Analysis workflow
+The general procedure of the analysis starts with constructing a `DEXSeqDataSet` using the function `DEXSeq::DEXSeqDataSetFromHTSeq`. This function accepts four arguments
+
+1. a vector with names of count files
+2. a dataframe  which relates the samples to the different conditions
+3. a design formula
+4. the name of the gff reference file
+
+```{r LoadDEXSeqResult, echo=FALSE, results='hide'}
+sDxdFn <- file.path(system.file(package = "AlternativeSplicing", "inst", "extdata", "pasilla"), "dxd.Rd")
+bRunAnalysis <- TRUE
+if (file.exists(sDxdFn)) {
+  suppressPackageStartupMessages( library( "DEXSeq" ) )
+  load(file = sDxdFn)
+  bRunAnalysis <- FALSE
+}
+```
+
+```{r ConstructDEXSeqDataSet, eval=bRunAnalysis}
+suppressPackageStartupMessages( library( "DEXSeq" ) )
+dxd  <-  DEXSeqDataSetFromHTSeq(
+   countFiles,
+   sampleData=sampleTable,
+   design= ~ sample + exon + condition:exon,
+   flattenedfile=flattenedFile )
+```
+
+
+## Inspecting the data
+### Column data
+Once a `DEXSeqDataSet` object is created there are different accessor functions that can be used to inspect the content of a `DEXSeqDataSet` object. The annotation and all the other information about a `DEXSeqDataSet` can be obtained using the `colData()` function.
+
+```{r ColData}
+colData(dxd)
+```
+
+### Count data
+Counts data can be viewed using the `counts()` function
+
+```{r CountsData}
+head( counts(dxd), 5 )
+```
+
+### Two groups of counts
+From the output of the functions `colData()` and `counts()`, we can see that there are 14 columns, although we have only seven samples. The first seven columns are the number of reads mapping to the specific exonic regions and the last seven columns correspond to the sum of counts mapping to the rest of the exons from the same gene on each sample. The two groups of counts are termed `this` and `others` respectively by `DEXSeq`. The distribution of column indices into the two groups can be viewd by
+
+```{r ThisOthersSplit}
+split( seq_len(ncol(dxd)), colData(dxd)$exon )
+```
+
+In case, we are only interested in the counts of the `this` group, the following function brings up the first five lines of all feature counts
+
+```{r ThisFeatureCount}
+head( featureCounts(dxd), 5 )
+```
+
+### Row data
+Details on counting bins can accessed using the function `rowData()`.
+
+```{r RowData}
+head( rowRanges(dxd), 3 )
+```
+
+### Annotation of a sample
+The function `sampleAnnotation` gives details about the design table and the sample annotations.
+
+```{r DesignSampleAnnotation}
+sampleAnnotation( dxd )
+```
+
+# Analysis
+The following analysis steps are always done following the same principle. The current `DEXSeqDataSet` object is passed to a function. And the function result is again assiged to the same `DEXSeqDataSet` object. 
+
+## Short cut
+Package `DEXSeq` contains a wrapper function called `DEXSeq` that does all the analysis steps that will be described below in one go. Hence the only thing that needs to be done is to create an instance of a `DEXSeqDataSet` object using function `DEXSeqDataSetFromHTSeq()` as shown above and call function `DEXSeq()` on that `DEXSeqDataSet` object. This will return a `DEXSeqResults` object. 
+
+In what follows, each single step of the analysis is described in more details
+
+## Normalisation
+Different samples may show different sequencing depths which might lead to a coverage bias. So called `size factors` are estimated which measure relative sequencing depth. Size factor estimation in DEXSeq is done the same way as in DESeq and DESeq2 which is implemented in the function `estimateSizeFactors`
+
+```{r EstimateSizeFactor}
+dxd  <- estimateSizeFactors( dxd )
+```
+
+## Dispersion estimation
+Differential exon usage is based on separating variability of the count data into sources that are related to biological variation and into non-biological factors. Information on the amount of variability due to non-biological factors which is also known as noise is inferred from biological replicates in an experimental data set and is characterized by the so-clled dispersion. Typically the number of replicates is too small to estimated dispersion parameters on the level of individual exons. Therefore information is shared across exons and genes in an intensity-dependent manner, to get reliable dispersion estimates. 
+
+So far only simple one-way designs are considered, i.e. samples are grouped according to a common experimental condition which is indicated by the `condition` factor of the sample table. Samples that share the same level of this one experimental condition are considered to be replicates. It is possible to accomodated more complicated experimental designs than just a single condition factor. The discussion of such models is deferred to a later section
+
+In `DEXSeq` dispersions are estimated the same way as in package `DESeq2`. Internally the functions of `DESeq2` are called, adapting the parameters to the specific caes of the `DEXSeq` model. In short, per-exon dispersions are computed using a Cox-Reid adjusted profile likelihood estimation. 
+
+
+# Report 
+The results are reported using the R-package `ReporteRs`. This package offer a number of functions to generate on the one hand MS-based documents and on the other hand also HTML pages. The report that is generated for the DEXSeq results is very simple. It consists of titles, paragraphs Tables and Links to either other pages or to images which are directly shown in the report. 
+
+For the gene-level results so far, we just inserted a link to the page that is generated by `DEXSeq::DEXSeqHTML()`. It might be more attractive to construct a separate table with relevant genes of interest directly on the main report page and use the links to the plots for each gene that are produced by `DEXSeq::DEXSeqHTML()`. 
+
+
+# TODO
+Add table with all genes like the one that is shown in `testForDEU.html` which also lists some minimal components of annotation where minimal annotation contains at least a genesymbol and a description. Maybe add more annotation to one of the results files that are produced by `DEXSeq::DEXSeqHTML()`. 
+
+
+\pagebreak
+
+```{r}
+sessionInfo()
+```
+
+\pagebreak
+
+## References
+
+
+
+

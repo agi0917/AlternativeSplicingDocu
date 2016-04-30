@@ -1,0 +1,6 @@
+version;author;date;status;project
+0.0.900;pvr;31.03.2016;Init;DEXSeq
+0.0.901;peter;01.04.2016;First changes;DEXSeq
+0.0.902;peter;22.04.2016;Adding description on analysis;DEXSeq
+0.0.903;peter;2016-04-29;Adding more details on the analysis;DEXSeq
+0.0.904;peter;2016-04-29;Starting with report, added TODO-list;DEXSeq

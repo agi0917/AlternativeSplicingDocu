@@ -11,6 +11,10 @@ vignette: >
 bibliography: AlternativeSlicingDocu.bibtex
 ---
 
+```{r SetupOptions, echo=FALSE, results='hide'}
+devtools::load_all()
+```
+
 ### Disclaimer
 This project documents everything around the project on `Alternative Splicing` that I am working on @ FGCZ. 
 
@@ -135,7 +139,7 @@ Our sample table has the samples as rownames and the covariates as columns. In t
 From the information, we have collected so far, a DEXSeqDataSet object can be constructed using the function `DEXSeqDataSetFromHTSeq` as follows
 
 ```{r LoadDEXSeqResult, echo=FALSE, results='hide'}
-sDxdFn <- "dxd.Rd"
+sDxdFn <- file.path(system.file(package = "AlternativeSplicing", "inst", "extdata", "pasilla"), "dxd.Rd")
 bRunAnalysis <- TRUE
 if (file.exists(sDxdFn)) {
   suppressPackageStartupMessages( library( "DEXSeq" ) )
@@ -155,7 +159,7 @@ dxd  <-  DEXSeqDataSetFromHTSeq(
 
 ```{r DEXSeqSave, echo=FALSE, results='hide'}
 if (!file.exists(sDxdFn)) {
-  save(dxd, file = "dxd.Rd")
+  save(dxd, file = sDxdFn)
 }
 ```
 
@@ -285,7 +289,8 @@ The conversion of the annotation files from gtf to gff format and the counting u
 Since we are doing annotation file format conversion and exon counting with the python script that are coming with the DEXSeq package, we have to manage to run python scripts from inside of the ezApp, i.e., from inside of R. While the above mentioned commands run from the command line, they are producing an error when used from inside of R. The error tells that the "HTSeq" package cannot be found which is most likely due to a missing PYTHONPATH. Looking at the global variable files of package "ezRun", we get more insight into how to run python scripts from inside of R. The trick is to define a string which contains the PYTHONPATH definition and the path to the python executable. Surprisingly enough, the assignment of the PYTHONPATH and the path to the python executable must be separated by a space and not by a semi-colon (";"). Hence for our example the required assignment in the global variables file looks as follows
 
 ```
-HTSEQ_PREFIX='PYTHONPATH="/usr/local/ngseq/lib/python/:/usr/local/ngseq/lib/python2.7:/usr/local/ngseq/lib/python2.7/dist-packages" /usr/local/ngseq/bin/python'
+HTSEQ_PREFIX='PYTHONPATH="/usr/local/ngseq/lib/python/:/usr/local/ngseq/lib/python2.7:\
+  /usr/local/ngseq/lib/python2.7/dist-packages" /usr/local/ngseq/bin/python'
 ```
 
 Inside of EzAppDEXSeqCounting, calls to the python scripts are composed of the above defined prefix, the absolute path to the script name which depends on `system.file(package = "DEXSeq", "python_scripts")` and the arguments to the scripts, like input read files, annotation files and output files.
@@ -473,6 +478,27 @@ dxr <- DEXSeq:::DEXSeq(dxd)
 ```{r eval=FALSE}
 DEXSeq::DEXSeqHTML(dxr) 
 ```
+
+
+The analysis using the minimal number of steps is implemented in a Reference class called `EzDEXSeqAnalysis`. 
+
+
+## Adding annotations to results
+According to the help file given by `?DEXSeq::DEXSeqHTML`, one can specify extra columns to be added to the report when passing a dataframe  with the argument `extraCols`. As a test, we are just adding the reverse gene name as extra column. Then this can be done as follows
+
+```{r ExtraColumn, eval=FALSE}
+dfExtraAnot <- data.frame(InverseGenename = reverse(unique(geneIDs(dxd))))
+rownames(dfExtraAnot) <- unique(geneIDs(dxd))
+DEXSeq::DEXSeqHTML(dxr, extraCols = dfExtraAnot )
+```
+
+The result is not so convincing, as the extra-column in the report gets added to the left of the table and not to the right. 
+
+
+## Text-based Output
+As a consequence of the low flexibility when working with the pre-specified html-output given by `DEXSeq::DEXSeqHTML()`, it is preferred to generated a text-based output that can further be used and presented in different formats.
+
+
 
 
 \newpage
