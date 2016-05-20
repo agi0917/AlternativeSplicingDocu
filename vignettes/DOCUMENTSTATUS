@@ -1,6 +1,10 @@
-version;author;date;status;project
-0.0.900;pvr;31.03.2016;Init;DEXSeq
-0.0.901;peter;01.04.2016;First changes;DEXSeq
-0.0.902;peter;22.04.2016;Adding description on analysis;DEXSeq
-0.0.903;peter;2016-04-29;Adding more details on the analysis;DEXSeq
-0.0.904;peter;2016-04-29;Starting with report, added TODO-list;DEXSeq
+version	author	date	status	project
+0.0.900	pvr	31.03.2016	Init	DEXSeq
+0.0.901	peter	01.04.2016	First changes	DEXSeq
+0.0.902	peter	22.04.2016	Adding description on analysis	DEXSeq
+0.0.903	peter	2016-04-29	Adding more details on the analysis	DEXSeq
+0.0.904	peter	2016-05-09	Starting with report, added TODO-list	DEXSeq
+0.0.905	peter	2016-05-09	Adding annotation info to results	DEXSeq
+0.0.906	peter	2016-05-20	Correcting and extending description of preparation	DEXSeq
+0.0.907	peter	2016-05-20	added interpretation of multiple gene-ids	DEXSeq
+0.0.908	peter	2016-05-20	Annotations via biomaRt	DEXSeq

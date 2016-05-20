@@ -18,22 +18,26 @@ r6objDocuStat$setProject(psProject = "DEXSeq")
 # r6objDocuStat$setDate(psDate = "31.03.2016")
 # r6objDocuStat$setAuthor(psAuthor = "pvr")
 # r6objDocuStat$setStatus(psStatus = "Init")
-  
 # r6objDocuStat$setVersion(psVersion = "0.0.901")
 # r6objDocuStat$setDate(psDate = "01.04.2016")
 # r6objDocuStat$setAuthor(psAuthor = "peter")
 # r6objDocuStat$setStatus(psStatus = "First changes")
-# # 
 # r6objDocuStat$setVersion(psVersion = "0.0.902")
 # r6objDocuStat$setDate(psDate = "22.04.2016")
 # r6objDocuStat$setAuthor(psAuthor = "peter")
 # r6objDocuStat$setStatus(psStatus = "Adding description on analysis")
-
 # r6objDocuStat$setVersion(psVersion = "0.0.903")
 # r6objDocuStat$setStatus(psStatus = "Adding more details on the analysis")
-
-r6objDocuStat$setVersion(psVersion = "0.0.904")
-r6objDocuStat$setStatus(psStatus = "Starting with report, added TODO-list")
+# r6objDocuStat$setVersion(psVersion = "0.0.904")
+# r6objDocuStat$setStatus(psStatus = "Starting with report, added TODO-list")
+# r6objDocuStat$setVersion(psVersion = "0.0.905")
+# r6objDocuStat$setStatus(psStatus = "Adding annotation info to results")
+# r6objDocuStat$setVersion(psVersion = "0.0.906")
+# r6objDocuStat$setStatus(psStatus = "Extending description on preparation")
+# r6objDocuStat$setVersion(psVersion = "0.0.907")
+# r6objDocuStat$setStatus(psStatus = "Interpretation of multiple gene-ids")
+r6objDocuStat$setVersion(psVersion = "0.0.908")
+r6objDocuStat$setStatus(psStatus = "Annotations via biomaRt")
 
 r6objDocuStat$writeStatusToFile()
 r6objDocuStat$knitr_kable()
@@ -41,9 +45,7 @@ r6objDocuStat$knitr_kable()
 ```
 
 # Disclaimer
-This document describes how to assess differential exon usage using the R/BioC-Package `DEXSeq`. Differential exon usage can be analysed by comparing `RNA-Seq` data from different tissues or under different experimental conditions. Since the basic nature of `RNA-Seq` data is counts of molecules within a given experimental sample, the measure of differential exon usage amounts to being a function of the count differences between the different experimental conditions. The R/BioC-package `DEXSeq` implements a statistical method based on generalized linear models which offers to control false discovery rate by taking biological variation into account.  
-
-The description in this document follows closely the vignette of `DEXSeq` which is available from http://bioconductor.org/packages/release/bioc/html/DEXSeq.html and also from within R by the command 
+This document describes how to assess differential exon usage using the R/BioC-Package `DEXSeq`. The description in this document follows closely the vignette of `DEXSeq` which is available from \url{http://bioconductor.org/packages/release/bioc/html/DEXSeq.html} and also from within R using the command 
 
 ```{r eval=FALSE}
 browseVignettes(package = "DEXSeq")
@@ -55,6 +57,11 @@ On the BioC website for `DEXSeq` the publication by @ARH2012 is mentioned as the
 citation(package = "DEXSeq")
 ```
 
+# Introduction
+_Differential exon usage_ (DEU) can be analysed by comparing `RNA-Seq` data from different tissues or under different experimental conditions. DEU is defined as the changes in relative usage of exons caused by experimental conditions. 
+
+Since the basic nature of `RNA-Seq` data is counts of molecules within a given experimental sample, the measure of differential exon usage amounts to being a function of the count differences between the different experimental conditions. The R/BioC-package `DEXSeq` implements a statistical method based on generalized linear models which offers to control false discovery rate by taking biological variation into account.  
+
 # Preparation
 Before being able to analyse differential exon usage, one has to do the following preparations steps
 
@@ -62,7 +69,14 @@ Before being able to analyse differential exon usage, one has to do the followin
 2. __Annotations__: The requirements for the annotation are somewhat special, and it is recommended to follow the workflow given in the `DEXSeq` vignette.
 3. __Feature counts__: Python scripts coming with package `DEXSeq` are used for counting the how many exons occur in a given read file sample.
 
-Preparatory steps to load the data are shown below
+For this document, we use the dataset that was used in the vignette of `DEXSeq`. It consists of read counts for pasillaGenes and pasillaExons in Drosophila. More information on the used dataset can be obtained from the vignette that comes with the `pasilla`-package using 
+
+```{r BrowseVigettePasilla, eval=FALSE}
+browseVignettes(package = "pasilla")
+```
+
+
+Preparatory steps to load the data consisting of count files and an annotation file and to setup the relevant modelling objects which is a dataframe relating the samples to the experimental conditions, are shown below.
 
 ```{r LoadPasillaPackage, echo=FALSE, results='hide'}
 if (!require(pasilla)) {
@@ -72,6 +86,8 @@ if (!require(pasilla)) {
 }
 
 ```
+
+The count data and the annotation file is taken from the package and the sample table dataframe is constructed manually.
 
 ```{r ShowPasillaData}
 inDir <- system.file("extdata", package="pasilla")
@@ -90,7 +106,7 @@ sampleTable  <-  data.frame(
 
 
 # Analysis workflow
-The general procedure of the analysis starts with constructing a `DEXSeqDataSet` using the function `DEXSeq::DEXSeqDataSetFromHTSeq`. This function accepts four arguments
+The general procedure of the analysis starts with constructing a `DEXSeqDataSet` using the function `DEXSeq::DEXSeqDataSetFromHTSeq`. This function requires four arguments
 
 1. a vector with names of count files
 2. a dataframe  which relates the samples to the different conditions
@@ -183,13 +199,61 @@ In `DEXSeq` dispersions are estimated the same way as in package `DESeq2`. Inter
 
 
 # Report 
-The results are reported using the R-package `ReporteRs`. This package offer a number of functions to generate on the one hand MS-based documents and on the other hand also HTML pages. The report that is generated for the DEXSeq results is very simple. It consists of titles, paragraphs Tables and Links to either other pages or to images which are directly shown in the report. 
+The results are reported using the R-package `ReporteRs`. This package offers a number of functions to generate on the one hand MS-based documents and on the other hand also HTML pages. The report that is generated for the DEXSeq results is very simple. It consists of titles, paragraphs Tables and Links to either other pages or to images which are directly shown in the report. 
 
 For the gene-level results so far, we just inserted a link to the page that is generated by `DEXSeq::DEXSeqHTML()`. It might be more attractive to construct a separate table with relevant genes of interest directly on the main report page and use the links to the plots for each gene that are produced by `DEXSeq::DEXSeqHTML()`. 
 
+## Annotations
+The reports generated by `DEXSeq` annotate the results using ENSEMBL gene-ids. As those Ids might not be informative enough, some additional annotations are added. The minimal set of additional annotation that is added so far consists of the `gene_name` and of the `description`. Both items of information are taken from an annotation file that is given by the S4 Object describing the genome reference build. The name of the annotation file is automatically assigned using the construct
+
+```{r, eval=FALSE}
+refBuild = "Mus_musculus/Ensembl/GRCm38.PatchesSkipped/Annotation/Version-2015-06-25"
+param <- ezParam(list(refBuild=refBuild))
+```
+
+This creates an item called `refBuild` in the parameter list `param`. That list item is an S4 object which has many slots one of which is called `refAnnotationFile` which stored the relevant annotation file belonging to the `refBuild` that was specified above. In short the following statement returns the name of the annotation file.
+
+```{r, eval=FALSE}
+sGnAnFn <- param[['ezRef']]@refAnnotationFile
+```
+
+The annotation file is read into a dataframe and from that dataframe, informations in columns `gene_name` and `description` are extracted for the set of genes that are in the result table. Since the granularity of the information in the annotation file goes down to single transcripts, a `gene_id` is very likely to apprear several times. For that reason we extract the unique entries in from the annotation file. If there are multiple entries per gene, we paste the information together using "|" as a separator.
+
+
+## Interpretation of results
+In the genetable that summarizes the results of a DEXSeq analysis, some genes are grouped together and their gene-names are separated by a "+" sign. An example of this is shown below (see red arrows).
+
+```{r GeneIdGroupGraphics, echo=FALSE, results='asis'}
+rcoursetools::insertOdgAsPdf(psOdgFileStem = "GeneIdGroup")
+```
+
+According to \url{https://support.bioconductor.org/p/46294/} this means that multiple genes are merged and the reason for this is that the merged genes seam to share exons which are not obvious to be assigned to a single gene. 
+
+
+## Further annotations using biomart
+The HTML-Report generating function `DEXSeqHTML()` has additional arguments that let us specify additional annotation detail for the results. The additional annotation is collected using functionality that is provided by the package `biomaRt`. The following example statement for calling `DEXSeqHTML()` with information specifying queries to a biomart was copied from \url{https://www.biostars.org/p/95550}: 
+
+```{r DEXSeqHtmlBiomart, eval=FALSE}
+DEXSeqHTML( ecs, geneIDs=NULL, fitExpToVar="condition", 
+            FDR=0.1, color=c("#FF000080","#0000FF80"),
+            mart=ensembl_mart,
+            filter="ensembl_gene_id",
+            attributes=c("external_gene_id","description") )
+
+```
+
+What is important in the above call is that argument `mart` is of type "Mart", i.e., the result of the statment `class(mart)` must be "Mart". The easiest way to create such a "Mart"-object is to use the function `useMart()` from package `biomaRt`. This can be done as follows.
+
+```{r UseMartExample, eval=FALSE}
+ensembl_mart <- biomaRt::useMart(biomart = "ensembl", dataset="mmusculus_gene_ensembl")
+```
+
+The arguments `filter` and `attributes` must be consistent with the results of what is returned by functions `listFilters()` and `listAttributes()`, respectively. Those arguments determine the parameters of the query being on the filters which operate as selectors on the rows and the attributes which select specific columns.
+
+Specifying the additional biomart related arguments to `DEXSeqHTML()` leads to additional columns in the genetable. For each attribute that was specified, there is an additional column in the genetable created by `DEXSeqHTML()`.
+
 
 # TODO
-Add table with all genes like the one that is shown in `testForDEU.html` which also lists some minimal components of annotation where minimal annotation contains at least a genesymbol and a description. Maybe add more annotation to one of the results files that are produced by `DEXSeq::DEXSeqHTML()`. 
 
 
 \pagebreak
