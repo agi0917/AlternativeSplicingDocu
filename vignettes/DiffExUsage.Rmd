@@ -36,12 +36,14 @@ r6objDocuStat$setProject(psProject = "DEXSeq")
 # r6objDocuStat$setStatus(psStatus = "Extending description on preparation")
 # r6objDocuStat$setVersion(psVersion = "0.0.907")
 # r6objDocuStat$setStatus(psStatus = "Interpretation of multiple gene-ids")
-r6objDocuStat$setVersion(psVersion = "0.0.908")
-r6objDocuStat$setStatus(psStatus = "Annotations via biomaRt")
+# r6objDocuStat$setVersion(psVersion = "0.0.908")
+# r6objDocuStat$setStatus(psStatus = "Annotations via biomaRt")
+# r6objDocuStat$setVersion(psVersion = "0.0.909")
+# r6objDocuStat$setStatus(psStatus = "Check assignment of treatment and control")
+r6objDocuStat$setVersion(psVersion = "0.0.910")
+r6objDocuStat$setStatus(psStatus = "Added subsection on assignment of treatment and control")
 
-r6objDocuStat$writeStatusToFile()
-r6objDocuStat$knitr_kable()
-
+r6objDocuStat$include_doc_stat()
 ```
 
 # Disclaimer
@@ -62,8 +64,12 @@ _Differential exon usage_ (DEU) can be analysed by comparing `RNA-Seq` data from
 
 Since the basic nature of `RNA-Seq` data is counts of molecules within a given experimental sample, the measure of differential exon usage amounts to being a function of the count differences between the different experimental conditions. The R/BioC-package `DEXSeq` implements a statistical method based on generalized linear models which offers to control false discovery rate by taking biological variation into account.  
 
+People familiar with R/BioC-Package `DESeq2` will recognize that the usage of `DEXSeq` is very similar to `DESeq2`. 
+
+\pagebreak
+
 # Preparation
-Before being able to analyse differential exon usage, one has to do the following preparations steps
+Before being able to analyse differential exon usage, one has to do the following preparations steps.
 
 1. __Alignment__: In case, the input data consists of raw read files, they first have to be aligned against a reference genome (not transcriptome) sequence which results in sam or bam files. It is important to use a splice-aware aligner (i.e. an alignment tool that can handle reads that span across introns) such as TopHat2, GSNAP or STAR. `DEXSeq` works with sam files as input for the reads. In case aligned reads are available in bam format, they can be converted using `samtools`. 
 2. __Annotations__: The requirements for the annotation are somewhat special, and it is recommended to follow the workflow given in the `DEXSeq` vignette.
@@ -87,7 +93,7 @@ if (!require(pasilla)) {
 
 ```
 
-The count data and the annotation file is taken from the package and the sample table dataframe is constructed manually.
+The count data and the annotation file are taken from the package and the sample table dataframe is constructed manually.
 
 ```{r ShowPasillaData}
 inDir <- system.file("extdata", package="pasilla")
@@ -140,6 +146,33 @@ Once a `DEXSeqDataSet` object is created there are different accessor functions 
 ```{r ColData}
 colData(dxd)
 ```
+
+### Condition
+As seen above the result of `colData()` is a dataframe showing available information about the `DEXSeqDataSet` object. The column entitled `condition` is of particular interest with respect to the assignment of treatment and control samples. The content of the condition column is of type factor and it defines the way how the comparisions are done. Using the statement 
+
+```{r ConditionInfo}
+dxd$condition
+```
+gives a list of the conditions that are used in the model for accessing DEU. It is important that the content of this column is of type factor. This can be verified using the statement
+
+```{r ConditionVerifyFactor}
+is.factor(dxd$condition)
+```
+
+For our comparison it is important to notice that the later used model fitting routines will assume that the first level is always the control or the untreated condition. The levels of a given factor can be shown using the function `levels()` as follows
+
+```{r ConditionLevels}
+levels(dxd$condition)
+```
+
+This shows that condition `r levels(dxd$condition)[1]` will be used as control condition. We can change the control condition using the function `relevel()`. The statement 
+
+```{r ChangeControl, eval=FALSE}
+dxd$condition <- relevel(dxd$condition, "knockdown")
+```
+
+would change the control condition to be "knockdown" instead of "control".
+
 
 ### Count data
 Counts data can be viewed using the `counts()` function
@@ -251,9 +284,6 @@ ensembl_mart <- biomaRt::useMart(biomart = "ensembl", dataset="mmusculus_gene_en
 The arguments `filter` and `attributes` must be consistent with the results of what is returned by functions `listFilters()` and `listAttributes()`, respectively. Those arguments determine the parameters of the query being on the filters which operate as selectors on the rows and the attributes which select specific columns.
 
 Specifying the additional biomart related arguments to `DEXSeqHTML()` leads to additional columns in the genetable. For each attribute that was specified, there is an additional column in the genetable created by `DEXSeqHTML()`.
-
-
-# TODO
 
 
 \pagebreak

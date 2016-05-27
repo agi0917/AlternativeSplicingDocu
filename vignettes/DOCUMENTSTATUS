@@ -8,3 +8,5 @@ version	author	date	status	project
 0.0.906	peter	2016-05-20	Correcting and extending description of preparation	DEXSeq
 0.0.907	peter	2016-05-20	added interpretation of multiple gene-ids	DEXSeq
 0.0.908	peter	2016-05-20	Annotations via biomaRt	DEXSeq
+0.0.909	peter	2016-05-27	Check assignment of treatment and control	DEXSeq
+0.0.910	peter	2016-05-27	Added subsection on assignment of treatment and control	DEXSeq
